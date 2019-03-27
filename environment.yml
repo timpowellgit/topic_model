@@ -106,7 +106,7 @@ dependencies:
   #- pywinpty=0.5.5
   - pyzmq=18.0.0
   - qgrid=1.1.1
-  - qt=4.8.7
+  - qt=4.8.5
   - requests=2.21.0
   - s3transfer=0.2.0
   - scandir=1.10.0
