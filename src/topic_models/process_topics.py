@@ -13,10 +13,9 @@ from gensim.parsing.preprocessing import *
 from gensim.corpora import Dictionary, csvcorpus
 
 from similarity import all_measures
-from segmentation import segment_ordered
+from segmentation import segment_with_weights
 from gensim.models import CoherenceModel, nmf, LdaMulticore
 from farotate import FARotate
-from farotatecopy import FactorAnalysisCopy
 from sklearn.decomposition import FactorAnalysis
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -30,7 +29,7 @@ import time
 _make_pipeline = namedtuple('Coherence_Measure', 'seg, prob, conf, aggr')
 NEW_COHERENCE_MEASURES = {
     'all': _make_pipeline(
-        segment_ordered,
+        segment_with_weights,
         probability_estimation.p_boolean_document,
         all_measures,
         aggregation.arithmetic_mean
@@ -52,18 +51,28 @@ class NewCoherence(coherencemodel.CoherenceModel):
 
     def get_all_coherences_per_topic(self,segmented_topics=None):
         measure = self.measure
+        weights = None
         if segmented_topics is None:
-            segmented_topics = measure.seg(self.topics)
+            if measure.seg == segment_with_weights:
+                segmented_topics, weights = measure.seg(self.topics)
+            else:
+                segmented_topics = measure.seg(self.topics)
         if self._accumulator is None:
             self.estimate_probabilities(segmented_topics)
 
-        return measure.conf(segmented_topics, self._accumulator, measures_list= 'all')
+        return measure.conf(segmented_topics, self._accumulator, measures_list= 'all', weights= weights)
+
+
+def coherence_scores(coherence, topics, corpus, dictionary):
+    cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, coherence=coherence)
+    #model_score = cm.get_coherence()
+    topic_coherences = cm.get_all_coherences_per_topic()
+    return topic_coherences
 
 def get_gensim_topics(model, n_topics):
     topics = []
     for topic_id, topic in model.show_topics(num_topics=n_topics, formatted=False):
         topic = [word for word, _ in topic]
-        print(topic)
         topics.append(topic)
     return topics
 
@@ -104,13 +113,8 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
         )
         topics = get_gensim_topics(nmfmodel, n_topics)
 
-    def coherence_scores(coherence, topics):
-        cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, coherence=coherence)
-        #model_score = cm.get_coherence()
-        topic_coherences = cm.get_all_coherences_per_topic()
-        return topic_coherences
 
-    coherences = coherence_scores(coherence, topics)
+    coherences = coherence_scores(coherence, topics, corpus, dictionary)
     topics= [{"Topic":" ".join(topic)} for topic in topics]
     topicsdf =pd.DataFrame(data=topics)
     coherencesdf = pd.DataFrame(data=coherences)
@@ -150,6 +154,8 @@ def coherence_widget(data):
             )
 
     return m
+
+
 
 def show_topic_words(topics):
     for i, topic in enumerate(topics):
