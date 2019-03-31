@@ -2,6 +2,7 @@ from __future__ import print_function
 from gensim.models import coherencemodel
 from collections import namedtuple
 import pandas as pd
+#import pyLDAvis
 import io
 from gensim import interfaces, matutils
 from gensim import utils
@@ -12,25 +13,23 @@ from gensim.parsing.preprocessing import *
 from gensim.corpora import Dictionary, csvcorpus
 
 from similarity import all_measures
-from segmentation import segment_with_weights
+from segmentation import segment_ordered
 from gensim.models import CoherenceModel, nmf, LdaMulticore
 from farotate import FARotate
 from sklearn.decomposition import FactorAnalysis
 from sklearn.feature_extraction.text import CountVectorizer
-import numpy as np
+
 from IPython.display import display
 
 from ipywidgets import interact, interactive, IntSlider, Layout, interact_manual, fixed
 import ipywidgets as widgets
 import qgrid
 import time
-import os
-
 
 _make_pipeline = namedtuple('Coherence_Measure', 'seg, prob, conf, aggr')
 NEW_COHERENCE_MEASURES = {
     'all': _make_pipeline(
-        segment_with_weights,
+        segment_ordered,
         probability_estimation.p_boolean_document,
         all_measures,
         aggregation.arithmetic_mean
@@ -50,37 +49,20 @@ coherencemodel.BOOLEAN_DOCUMENT_BASED.update(NEW_BOOLEAN_DOCUMENT_BASED)
 
 class NewCoherence(coherencemodel.CoherenceModel):
 
-    def __init__(self, topics=None, corpus=None,dictionary=None,coherence=None, cooccurrence=None):
-        super(NewCoherence,self).__init__(topics=topics, corpus=corpus,dictionary=dictionary,coherence=coherence)
-        self.cooccurrence = cooccurrence
-
     def get_all_coherences_per_topic(self,segmented_topics=None):
         measure = self.measure
-        weights = None
         if segmented_topics is None:
-            if measure.seg == segment_with_weights:
-                segmented_topics, weights = measure.seg(self.topics)
-            else:
-                segmented_topics = measure.seg(self.topics)
+            segmented_topics = measure.seg(self.topics)
         if self._accumulator is None:
             self.estimate_probabilities(segmented_topics)
 
-        return measure.conf(segmented_topics, self._accumulator, measures_list= 'all', weights= weights)
-
-    def _ensure_elements_are_ids(self, topic):
-        return np.array([self.dictionary.token2id[token] for token in topic])
-
-
-def coherence_scores(coherence, topics, corpus, dictionary, cooccur):
-    cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, coherence=coherence)#, cooccurrence= cooccur)
-    #model_score = cm.get_coherence()
-    topic_coherences = cm.get_all_coherences_per_topic()
-    return topic_coherences
+        return measure.conf(segmented_topics, self._accumulator, measures_list= 'all')
 
 def get_gensim_topics(model, n_topics):
     topics = []
     for topic_id, topic in model.show_topics(num_topics=n_topics, formatted=False):
         topic = [word for word, _ in topic]
+        print(topic)
         topics.append(topic)
     return topics
 
@@ -93,7 +75,7 @@ def get_sklearn_topics(model, n_topics, feature_names):
 
 def run_all(data, model_type, n_topics=10, coherence='all'):
     topics = None
-    texts, dictionary, corpus,tf_vectorizer, tf, cooccur = data
+    texts, dictionary, corpus = data
     if (model_type == 'LDA'):
 
         lda = LdaMulticore(corpus=corpus,
@@ -102,9 +84,14 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
         topics = get_gensim_topics(lda, n_topics)
 
     elif (model_type == 'FA'):
+        tf_vectorizer = CountVectorizer()
+        tftexts = [' '.join(text) for text in texts]
+        tf = tf_vectorizer.fit_transform(tftexts)
+        tf_feature_names = tf_vectorizer.get_feature_names()
+        tf = tf.toarray()
         famodel = FARotate(n_components=n_topics, rotation='varimax')
-        famodel.fit(tf.toarray())
-        topics = get_sklearn_topics(famodel, n_topics, tf_vectorizer.get_feature_names())
+        famodel.fit(tf)
+        topics = get_sklearn_topics(famodel, n_topics, tf_feature_names)
     elif (model_type == 'NMF'):
         nmfmodel = nmf.Nmf(
             corpus=corpus,
@@ -116,8 +103,13 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
         )
         topics = get_gensim_topics(nmfmodel, n_topics)
 
+    def coherence_scores(coherence, topics):
+        cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, coherence=coherence)
+        #model_score = cm.get_coherence()
+        topic_coherences = cm.get_all_coherences_per_topic()
+        return topic_coherences
 
-    coherences = coherence_scores(coherence, topics, corpus, dictionary, cooccur)
+    coherences = coherence_scores(coherence, topics)
     topics= [{"Topic":" ".join(topic)} for topic in topics]
     topicsdf =pd.DataFrame(data=topics)
     coherencesdf = pd.DataFrame(data=coherences)
@@ -158,8 +150,6 @@ def coherence_widget(data):
 
     return m
 
-
-
 def show_topic_words(topics):
     for i, topic in enumerate(topics):
         print('\n', i, end=" ")
@@ -169,28 +159,6 @@ def show_topic_words(topics):
 
 
 # if __name__ == '__main__':
-    # print('running')
-
-    # plots = []
-    # with open('../data/movieplotsawk') as f:
-    #     plots =f.readlines()
-
-
-    # print('read texts')
-
-    # plots = [i.split() for i in plots]
-    # dictionarymovie = Dictionary(plots)
-    # corpusmovie = [dictionarymovie.doc2bow(text) for text in plots]
-
-    # tmfile =open('../data/topicsMovie.txt')
-    # topicsmovie = [i.rstrip('\n').split() for i in tmfile.readlines()]
-    # print(dictionarymovie.token2id['strip'])
-    # moviecoherence = coherence_scores(coherence='all', corpus= corpusmovie, dictionary =dictionarymovie, topics= topicsmovie)
-    # print(moviecoherence)
-
-
-
-
 #     elections = io.open('Election2008Paragraphes.txt', encoding="ISO-8859-1")
 #     e = elections.readlines()
 #     CUSTOM_FILTERS = [lambda x: x.lower(), strip_punctuation, strip_multiple_whitespaces, strip_numeric,
