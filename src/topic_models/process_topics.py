@@ -100,6 +100,7 @@ class NewCoherence(coherencemodel.CoherenceModel):
 
 
     def get_cooccurrence_profiles(self, w,w2):
+        #return 'dummy','dummy'
         tokens = self.dictionary[w], self.dictionary[w2]
         indices = self.tf_vectorizer.vocabulary_[tokens[0]], self.tf_vectorizer.vocabulary_[tokens[1]]
         coprofile, coprofile_star = self.cooccurrence[indices[0]], self.cooccurrence[indices[1]]
