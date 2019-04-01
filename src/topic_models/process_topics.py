@@ -10,8 +10,7 @@ from gensim.topic_coherence import (segmentation, probability_estimation,
                                     aggregation)
 from gensim.parsing.preprocessing import *
 from gensim.corpora import Dictionary, csvcorpus
-
-from similarity import all_measures
+from similarity import calculate_sims
 from segmentation import segment_with_weights
 from gensim.models import CoherenceModel, nmf, LdaMulticore
 from farotate import FARotate
@@ -26,13 +25,16 @@ import qgrid
 import time
 import os
 
+from collections import defaultdict
+import inspect
+
 
 _make_pipeline = namedtuple('Coherence_Measure', 'seg, prob, conf, aggr')
 NEW_COHERENCE_MEASURES = {
     'all': _make_pipeline(
         segment_with_weights,
         probability_estimation.p_boolean_document,
-        all_measures,
+        None,
         aggregation.arithmetic_mean
     )
 }
@@ -50,29 +52,63 @@ coherencemodel.BOOLEAN_DOCUMENT_BASED.update(NEW_BOOLEAN_DOCUMENT_BASED)
 
 class NewCoherence(coherencemodel.CoherenceModel):
 
-    def __init__(self, topics=None, corpus=None,dictionary=None,coherence=None, cooccurrence=None):
+    def __init__(self, topics=None, corpus=None,dictionary=None,coherence=None, cooccurrence=None, tf_vectorizer = None):
         super(NewCoherence,self).__init__(topics=topics, corpus=corpus,dictionary=dictionary,coherence=coherence)
         self.cooccurrence = cooccurrence
+        self.tf_vectorizer = tf_vectorizer
 
     def get_all_coherences_per_topic(self,segmented_topics=None):
         measure = self.measure
         weights = None
         if segmented_topics is None:
             if measure.seg == segment_with_weights:
-                segmented_topics, weights = measure.seg(self.topics)
+                self.segmented_topics, self.weights = measure.seg(self.topics)
             else:
-                segmented_topics = measure.seg(self.topics)
+                self.segmented_topics = measure.seg(self.topics)
         if self._accumulator is None:
             self.estimate_probabilities(segmented_topics)
 
-        return measure.conf(segmented_topics, self._accumulator, measures_list= 'all', weights= weights)
+
+        return self.get_all_measures(measures_list= 'all', weights= weights)
 
     def _ensure_elements_are_ids(self, topic):
         return np.array([self.dictionary.token2id[token] for token in topic])
 
 
-def coherence_scores(coherence, topics, corpus, dictionary, cooccur):
-    cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, coherence=coherence)#, cooccurrence= cooccur)
+    def get_all_measures(self,measures_list=None, weights=None):
+
+        topic_coherences = []
+        num_docs = float(self._accumulator.num_docs)
+        for topic_index,segments_i in enumerate(self.segmented_topics):
+            segments_sims = defaultdict(list)
+            for w_prime, w_star in segments_i:
+                w_prime_count = self._accumulator[w_prime]
+                w_star_count = self._accumulator[w_star]
+                co_occur_count = self._accumulator[w_prime, w_star]
+                co_profiles = self.get_cooccurrence_profiles(w_prime, w_star)
+                sims = calculate_sims(w_prime_count,w_star_count,co_occur_count,co_profiles, num_docs,measures_list)
+                for measure, score in sims:
+                    segments_sims[measure].append(score)
+            for dict_measure, score_list in segments_sims.items():
+
+                avg = np.average(score_list)#,weights=weights[topic_index] if weights else None)
+                wavg = np.average(score_list,weights=self.weights[topic_index] if self.weights else None)
+
+                segments_sims[dict_measure] = wavg
+            topic_coherences.append(segments_sims)
+        return topic_coherences
+
+
+    def get_cooccurrence_profiles(self, w,w2):
+        tokens = self.dictionary[w], self.dictionary[w2]
+        indices = self.tf_vectorizer.vocabulary_[tokens[0]], self.tf_vectorizer.vocabulary_[tokens[1]]
+        coprofile, coprofile_star = self.cooccurrence[indices[0]], self.cooccurrence[indices[1]]
+
+        return coprofile[0],coprofile_star[0]
+
+def coherence_scores(coherence, topics, corpus, dictionary, cooccur, tf_vectorizer):
+    cm = NewCoherence(topics=topics, corpus=corpus, dictionary=dictionary, 
+        coherence=coherence, cooccurrence= cooccur, tf_vectorizer= tf_vectorizer)
     #model_score = cm.get_coherence()
     topic_coherences = cm.get_all_coherences_per_topic()
     return topic_coherences
@@ -117,7 +153,7 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
         topics = get_gensim_topics(nmfmodel, n_topics)
 
 
-    coherences = coherence_scores(coherence, topics, corpus, dictionary, cooccur)
+    coherences = coherence_scores(coherence, topics, corpus, dictionary, cooccur, tf_vectorizer)
     topics= [{"Topic":" ".join(topic)} for topic in topics]
     topicsdf =pd.DataFrame(data=topics)
     coherencesdf = pd.DataFrame(data=coherences)
