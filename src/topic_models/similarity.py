@@ -4,6 +4,7 @@ import numpy as np
 from collections import defaultdict
 import inspect
 import logging, sys
+from sklearn.metrics import pairwise
 
 
 
@@ -89,27 +90,40 @@ def sim_pmi(w,w2,co,num_docs, epsilon = EPSILON):
 
     return pmi
 
-def sim_pmi2(w,w2,co,num_docs, epsilon = EPSILON):
-    pmi = np.math.log((co)/(((w)/num_docs) * ((w2)/num_docs)))
+# def sim_pmi2(w,w2,co,num_docs, epsilon = EPSILON):
+#     # if not co:
+#     #     return 0.0
+#     # else:
+#     #     pmi = np.math.log((co)/(((w)/num_docs) * ((w2)/num_docs)))
 
-    return pmi
+#     # return pmi
 
 
 def sim_joint_prob(w,w2,co,num_docs):
-    return co/num_docs * 10
+    return co/num_docs * 100
+
+
+def sim_cosine(profiles, num_docs):
+
+    cosine = pairwise.cosine_similarity(profiles[0],profiles[1])
+    return float(cosine)
 
 global_measures = [(name, measure_function) for name, measure_function in locals().items() if name.startswith('sim_') ]
 
 
-def calculate_sims(w,w2,co,num_docs,measures):
+def calculate_sims(w,w2,co,co_profiles,num_docs,measures):
     if measures == 'all':
         a = co
         b = w - a
         c = w2 - a
         sim_scores = []
         for measure_name, measure_func in global_measures:
-            if 'num_docs' in inspect.getargspec(measure_func).args:
+            if 'profiles' in inspect.getargspec(measure_func).args:
+
+                score = measure_func(co_profiles, num_docs)
+            elif 'num_docs' in inspect.getargspec(measure_func).args:
                 score = measure_func(w,w2,co,num_docs)
+
             else:
                 score = measure_func(w,w2,co)
             #print('score calculated on ', measure_name, w,w2,co,num_docs,"score ", score  )
@@ -118,25 +132,25 @@ def calculate_sims(w,w2,co,num_docs,measures):
         return sim_scores
 
 
-def all_measures(segmented_topics,accumulator, measures_list=None, weights=None):
+# def all_measures(segmented_topics,accumulator,cooccurence_matrix, measures_list=None, weights=None):
 
-    topic_coherences = []
-    num_docs = float(accumulator.num_docs)
-    for topic_index,segments_i in enumerate(segmented_topics):
-        segments_sims = defaultdict(list)
-        for w_prime, w_star in segments_i:
-            w_prime_count = accumulator[w_prime]
-            w_star_count = accumulator[w_star]
-            co_occur_count = accumulator[w_prime, w_star]
-            sims = calculate_sims(w_prime_count,w_star_count,co_occur_count, num_docs,measures_list)
-            for measure, score in sims:
-                segments_sims[measure].append(score)
-        for dict_measure, score_list in segments_sims.items():
+#     topic_coherences = []
+#     num_docs = float(accumulator.num_docs)
+#     for topic_index,segments_i in enumerate(segmented_topics):
+#         segments_sims = defaultdict(list)
+#         for w_prime, w_star in segments_i:
+#             w_prime_count = accumulator[w_prime]
+#             w_star_count = accumulator[w_star]
+#             co_occur_count = accumulator[w_prime, w_star]
+#             sims = calculate_sims(w_prime_count,w_star_count,co_occur_count,cooccurence_matrix, num_docs,measures_list)
+#             for measure, score in sims:
+#                 segments_sims[measure].append(score)
+#         for dict_measure, score_list in segments_sims.items():
 
-            avg = np.average(score_list)#,weights=weights[topic_index] if weights else None)
-            wavg = np.average(score_list,weights=weights[topic_index] if weights else None)
+#             avg = np.average(score_list)#,weights=weights[topic_index] if weights else None)
+#             wavg = np.average(score_list,weights=weights[topic_index] if weights else None)
 
-            segments_sims[dict_measure] = avg
-        topic_coherences.append(segments_sims)
-    return topic_coherences
+#             segments_sims[dict_measure] = wavg
+#         topic_coherences.append(segments_sims)
+#     return topic_coherences
 

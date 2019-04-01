@@ -43,7 +43,7 @@ dependencies:
   - freetype=2.9.1
   - functools32=3.2.3.2
   - futures=3.2.0
-  - gensim=3.4.0
+  #- gensim=3.4.0
   #- icc_rt=2019.0.0
   - icu=58.2
   - idna=2.8
@@ -58,6 +58,7 @@ dependencies:
   - jpeg=8d
   - jsonschema=3.0.1
   - jupyter_client=5.2.4
+  - jupyter_contrib_nbextensions
   - jupyter_core=4.4.0
   - jupyter_dashboards_bundlers=0.9.1
   - jupyterlab=0.33.11
@@ -150,4 +151,5 @@ dependencies:
     - py==1.8.0
     - pyldavis==2.1.2
     - pytest==4.3.1
+    - gensim==3.7.1
 prefix: C:\Users\timpo\Anaconda2\envs\topicmodel
