@@ -49,6 +49,28 @@ NEW_BOOLEAN_DOCUMENT_BASED = {'all'}
 coherencemodel.BOOLEAN_DOCUMENT_BASED.update(NEW_BOOLEAN_DOCUMENT_BASED)
 
 
+"""
+ex:
+text=  texts
+vectorized= Represent(Dictionary(texts))
+#returns class instance w .occurrences_, .cooccurrences_ and more
+    #option to call Represent(Dictionary(texts)) with more types(tf idf, normalized , etc)
+
+topics = [d,d,d,] or nnmf()
+
+tc = TopicCoherence(topics, vectorized) # Class will check for how many rperesentations there are
+"""
+
+class TopicCoherence(object):
+
+    def __init__(self, topics=None, counts= None):
+        self.topics= topics
+        self.counts= counts
+
+
+
+
+
 
 class NewCoherence(coherencemodel.CoherenceModel):
 
@@ -142,6 +164,7 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
         famodel = FARotate(n_components=n_topics, rotation='varimax')
         famodel.fit(tf.toarray())
         topics = get_sklearn_topics(famodel, n_topics, tf_vectorizer.get_feature_names())
+
     elif (model_type == 'NMF'):
         nmfmodel = nmf.Nmf(
             corpus=corpus,
@@ -161,14 +184,8 @@ def run_all(data, model_type, n_topics=10, coherence='all'):
     both = pd.concat([topicsdf, coherencesdf.round(4)], axis =1 )
     pd.set_option('display.max_colwidth', 200)
     #display(both)
-    col_options = {
-        'width': 70,
-    }
-    col_defs = {
-        'Topic': {
-            'width': 560,
-        }
-    }
+    col_options = {'width': 70,}
+    col_defs = {'Topic': {'width': 560, } }
 
     show = qgrid.show_grid(both,
                     column_options=col_options,
@@ -195,13 +212,6 @@ def coherence_widget(data):
 
     return m
 
-
-
-def show_topic_words(topics):
-    for i, topic in enumerate(topics):
-        print('\n', i, end=" ")
-        for word in topic:
-            print(word, end=' ')
 
 
 
