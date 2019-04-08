@@ -2,6 +2,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import numpy as np
 from gensim.topic_coherence import text_analysis
 from gensim.corpora import dictionary
+from scipy.sparse import coo_matrix
 
 
 """
@@ -34,13 +35,17 @@ class Represent(object):
 
     def __init__(self, dictionary=None):
         self.dictionary = dictionary
-        if self.dictionary:
-            self.occurrences = self.dictionary.dfs
+        self.occurrences = self.dictionary.dfs
 
-
-
+        self.cooc = self.build_cooccurrences()
 
     def build_cooccurrences(self):
-        pass
+        # try:
+        #     cooc_dict = self.dictionary.cooc_dict
+        # except AttributeError:
+        cooc_dict =self.dictionary.cooc_dict
+        rows, cols, data = zip(*[(row, col, cooc_dict[row][col]) for row in cooc_dict for col in cooc_dict[row]])
+        coocm = coo_matrix((data, (rows, cols)))
+        coocm.resize(len(self.occurrences),len(self.occurrences))
 
-
+        return coocm.T + coocm
