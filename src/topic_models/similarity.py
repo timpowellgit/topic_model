@@ -108,6 +108,7 @@ def sim_cosine_ind(vector, compare):
     cosine =cdist(vector, compare, metric='cosine')
     return cosine
 
+
 global_measures = [(name, measure_function) for name, measure_function in locals().items() if name.startswith('sim_') ]
 
 

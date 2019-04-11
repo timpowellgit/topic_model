@@ -4,6 +4,9 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import numpy as np
 from gensim.topic_coherence import text_analysis
 from gensim.corpora import dictionary
+from gensim.test.utils import get_tmpfile
+from gensim.models import Word2Vec
+
 from scipy.sparse import coo_matrix, csr_matrix
 from scipy.spatial.distance import cdist
 from sklearn.metrics.pairwise import cosine_similarity
@@ -43,10 +46,12 @@ class Represent(object):
 
     """
 
-    def __init__(self, dictionary=None):
+    def __init__(self, dictionary=None, texts=None):
         self.dictionary = dictionary
         self.occurrences = self.dictionary.dfs
         self.build_cooccurrences()
+        self.texts = texts
+        self.w2vattrs =[]
 
     def build_cooccurrences(self):
         cooc_dict =self.dictionary.cooc_dict
@@ -66,24 +71,25 @@ class Represent(object):
     def reduce_matrix(self):
         pass
 
-    def build_word2vec(self):
-        pass
+    def build_word2vec(self, size = 100, sg=0):
+        #path = get_tmpfile("word2vec.model")
+        w2vmodel = Word2Vec(self.texts, size=size,sg=sg, window=5, min_count=1, workers=4)
+        #w2vmodel.wv.save("word2vec.model")
+        method = ['cbow','skipgram']
+        attrname ='w2v%s%s' %(size, method[sg])
+        self.w2vattrs.append(attrname)
+        setattr(self, attrname, w2vmodel.wv)
+
+    def build_many_w2v(self, sizes=None):
+        for size in sizes:
+            self.build_word2vec(size=size, sg=1)
+            self.build_word2vec(size=size, sg=0)
 
     def cosine_matrix(self, matrix):
         return cosine_similarity(matrix)
 
     def build_similarity_matrix(self, similarity, function):
         pass
-        # if 'profiles' in inspect.getargspec(function).args:
-        #
-        #     #score = measure_func(co_profiles, num_docs)
-        #     pass
-        # elif 'num_docs' in inspect.getargspec(function).args:
-        #
-        #     score = function(w, w2, co, num_docs)
-        #
-        # else:
-        #     score = measure_func(w, w2, co)
 
     def n_most_similar(self, word,  n=10, build = False):
         """
@@ -109,9 +115,12 @@ class Represent(object):
                         similarity_matrix = getattr(self, sim_matrix)
                     elif name.endswith('ind'):
                         print name
-                        sorted = np.argsort(function(self.coocdense[id], self.coocdense[:]))
+                        vector = self.coocdense[id]
+                        matr = self.coocdense[:]
+                        sorted = np.argsort(function(vector, matr))
                         topn = sorted[0,:n]
                         print [self.dictionary[match] for match in topn]
+
                     else:
                         print name
                         #use functional programming to apply sim function to arrays
@@ -127,8 +136,10 @@ class Represent(object):
                         astokens = [self.dictionary[match] for match in topn.flat]
                         #reverse it
                         print astokens[::-1]
-
-                        print
+        if self.w2vattrs:
+            for w2vmodel in self.w2vattrs:
+                wv = getattr(self, w2vmodel)
+                print wv.most_similar(word)
 
     def save_similarity_matrix(self, filename, matrix):
         with open(filename, 'wb') as handle:
@@ -139,8 +150,6 @@ class Represent(object):
             matrix = pickle.load(handle)
 
         return matrix
-
-
 
     def get_sparsity(self, matrix):
         A = matrix.todense()
