@@ -6,6 +6,7 @@ import inspect
 import logging, sys
 from sklearn.metrics import pairwise
 
+from scipy.spatial.distance import cdist
 
 
 EPSILON = 0.000001
@@ -85,7 +86,7 @@ def sim_npmi(w,w2,co,num_docs):
         npmi = pmi/-(np.math.log(co/num_docs))
         return npmi
 
-def sim_pmi(w,w2,co,num_docs, epsilon = EPSILON):
+def sim_pmi(w,w2,co,num_docs):
     pmi = np.math.log(((co+1/num_docs) )/(((w+1)/num_docs) * ((w2+1)/num_docs)))
 
     return pmi
@@ -103,10 +104,9 @@ def sim_joint_prob(w,w2,co,num_docs):
     return co/num_docs * 100
 
 
-def sim_cosine(profiles, num_docs):
-
-    cosine = pairwise.cosine_similarity(profiles[0],profiles[1])
-    return float(cosine)
+def sim_cosine_ind(vector, compare):
+    cosine =cdist(vector, compare, metric='cosine')
+    return cosine
 
 global_measures = [(name, measure_function) for name, measure_function in locals().items() if name.startswith('sim_') ]
 
