@@ -16,29 +16,6 @@ import pickle
 from collections import defaultdict
 import inspect
 
-"""
-GENSIM VS SKLEARN INHERIT?
-Gensim due to easier preprocessing and dicts will be consistent
-, faster too?
-sliding window option
-    also has tf idf, normalizing, etc
-    
-    
-NEITHER 
-just use dicoitnary, ge toccurences and coocc (text analysis expects topic ids, we wanna run it before)
-
-Is init override needed??
-
-can i easily get pmi matrix, pmi +2 -2 context vectors??  pmi sentence vectors?
-
-w tf-idf
-    sublinear scaling is default true? occurences in doc = 1+ log(24) (instead of say 24)
-    
-    smoothing default true? In sklearn, smooting is add one document with one of each term
-        may interfere w various pmi smoothing techniques
-"""
-
-
 
 class Represent(object):
 
@@ -71,19 +48,20 @@ class Represent(object):
     def reduce_matrix(self):
         pass
 
-    def build_word2vec(self, size = 100, sg=0):
+    def build_word2vec(self, size = 100, sg=0, window=10):
         #path = get_tmpfile("word2vec.model")
-        w2vmodel = Word2Vec(self.texts, size=size,sg=sg, window=5, min_count=1, workers=4)
+        w2vmodel = Word2Vec(self.texts, size=size,sg=sg, window=20, min_count=1, workers=4)
         #w2vmodel.wv.save("word2vec.model")
         method = ['cbow','skipgram']
-        attrname ='w2v%s%s' %(size, method[sg])
+        attrname ='w2v%s%s%s' %(size, method[sg], window)
         self.w2vattrs.append(attrname)
         setattr(self, attrname, w2vmodel.wv)
 
-    def build_many_w2v(self, sizes=None):
+    def build_many_w2v(self, sizes=None, windows =None):
         for size in sizes:
-            self.build_word2vec(size=size, sg=1)
-            self.build_word2vec(size=size, sg=0)
+            for window in windows:
+                self.build_word2vec(size=size, sg=1, window=window)
+                self.build_word2vec(size=size, sg=0, window=window)
 
     def cosine_matrix(self, matrix):
         return cosine_similarity(matrix)
@@ -98,8 +76,8 @@ class Represent(object):
         :param n: number of results to return
         :return: top n most similar words (as strings)
         """
+        sims =defaultdict(lambda: defaultdict(list))
         id = self.dictionary.token2id[word]
-        print global_measures
         #try to get instantiated/saved similarity matrix per measure
         for name, function in global_measures:
             sim_matrix = "%s_matrix" %name
@@ -114,15 +92,12 @@ class Represent(object):
                         self.build_similarity_matrix(name, function)
                         similarity_matrix = getattr(self, sim_matrix)
                     elif name.endswith('ind'):
-                        print name
-                        vector = self.coocdense[id]
-                        matr = self.coocdense[:]
+                        #so far only cosine distance, using sklearn and sparse is fastest
+                        vector,matr = self.cooc[id], self.cooc
                         sorted = np.argsort(function(vector, matr))
                         topn = sorted[0,:n]
-                        print [self.dictionary[match] for match in topn]
-
+                        sims['indirect'][name]=[self.dictionary[match] for match in topn]
                     else:
-                        print name
                         #use functional programming to apply sim function to arrays
                         num_args = function.func_code.co_argcount
                         ufunc = np.frompyfunc(function, num_args, 1)
@@ -135,11 +110,15 @@ class Represent(object):
                         topn = sorted[0,-n:]
                         astokens = [self.dictionary[match] for match in topn.flat]
                         #reverse it
-                        print astokens[::-1]
+                        sims['direct'][name] = astokens[::-1]
         if self.w2vattrs:
             for w2vmodel in self.w2vattrs:
                 wv = getattr(self, w2vmodel)
-                print wv.most_similar(word)
+                sims['indirect'][w2vmodel]= [w for w,score in wv.most_similar(word, topn=n)]
+        simsreform = {(outerKey, innerKey): values for outerKey, innerDict in sims.iteritems()
+                  for innerKey, values in innerDict.iteritems()}
+
+        return simsreform
 
     def save_similarity_matrix(self, filename, matrix):
         with open(filename, 'wb') as handle:

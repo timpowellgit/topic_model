@@ -12,9 +12,6 @@ from scipy.spatial.distance import cdist
 EPSILON = 0.000001
 
 
-def cosine(v,v2):
-    pass
-
 def sim_gmean(w,w2,co):
     gmean = co/np.math.sqrt(w*w2)
     return gmean
@@ -47,7 +44,7 @@ def sim_dice(w,w2,co):
     c = w2 - a
     return 2*a/(2*((a+b)+(a+c)))
 
-def sim_chisquare(w,w2,co,num_docs):
+def sim_correlation(w,w2,co,num_docs):
     a = co
     b = w -a
     c = w2 -a
@@ -67,6 +64,9 @@ def sim_chisquare(w,w2,co,num_docs):
 
 
 def sim_log_cond(w,w2,co,num_docs):
+    #For topic coherence, term list ordered by frequency.
+    # Evaluating this measure on its own outside coherence maybe not informative
+
     if w2==0:
         return 0.0
     lc = np.math.log(((co / num_docs) + EPSILON) / (w2 / num_docs))
@@ -105,26 +105,25 @@ def sim_joint_prob(w,w2,co,num_docs):
 
 
 def sim_cosine_ind(vector, compare):
-    cosine =cdist(vector, compare, metric='cosine')
+    cosine =pairwise.cosine_distances(vector, compare)
     return cosine
 
 
 global_measures = [(name, measure_function) for name, measure_function in locals().items() if name.startswith('sim_') ]
 
 
-def calculate_sims(w,w2,co,co_profiles,num_docs,measures):
+def calculate_sims(w,w2,co,vectors,num_docs,measures):
     if measures == 'all':
         a = co
         b = w - a
         c = w2 - a
         sim_scores = []
         for measure_name, measure_func in global_measures:
-            if 'profiles' in inspect.getargspec(measure_func).args:
-
-                score = measure_func(co_profiles, num_docs)
-            elif 'num_docs' in inspect.getargspec(measure_func).args:
+            args = inspect.getargspec(measure_func).args
+            if 'vector' in args:
+                score= measure_func(vectors[0], vectors[1])
+            elif 'num_docs' in args:
                 score = measure_func(w,w2,co,num_docs)
-
             else:
                 score = measure_func(w,w2,co)
             #print('score calculated on ', measure_name, w,w2,co,num_docs,"score ", score  )
